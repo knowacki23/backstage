@@ -106,6 +106,23 @@ export class DefaultCatalogProcessingOrchestrator
     return this.processSingleEntity(request.entity, request.state);
   }
 
+  async processMultiple(
+    request: EntityProcessingRequest[],
+  ): Promise<EntityProcessingResult[]> {
+    const processedEntities: EntityProcessingResult[] = [];
+    await Promise.all(
+      request.map(async requestedEntity => {
+        processedEntities.push(
+          await this.processSingleEntity(
+            requestedEntity.entity,
+            requestedEntity.state,
+          ),
+        );
+      }),
+    );
+    return processedEntities;
+  }
+
   private async processSingleEntity(
     unprocessedEntity: Entity,
     state: JsonValue | undefined,

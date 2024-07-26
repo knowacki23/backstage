@@ -61,6 +61,9 @@ export type RefreshKeyData = {
  */
 export interface CatalogProcessingOrchestrator {
   process(request: EntityProcessingRequest): Promise<EntityProcessingResult>;
+  processMultiple(
+    request: EntityProcessingRequest[],
+  ): Promise<EntityProcessingResult[]>;
 }
 
 /**

@@ -87,7 +87,7 @@ export async function createRouter(
     validatorOptions: {
       // We want the spec to be up to date with the expected value, but the return type needs
       //  to be controlled by the router implementation not the request validator.
-      ignorePaths: /^\/validate-entity\/?$/,
+      ignorePaths: /^(\/validate-entity\/|\/validate-entities\/)?$/,
     },
   });
   const {
@@ -360,6 +360,72 @@ export async function createRouter(
         res.status(400).json({
           errors: processingResult.errors.map(e => serializeError(e)),
         });
+      return res.status(200).end();
+    });
+
+    router.post('/validate-entities', async (req, res) => {
+      const entitiesSchema = z.object({
+        entity: z.unknown(),
+      });
+      const bodySchema = z.object({
+        entities: z.array(entitiesSchema),
+        location: z.string(),
+      });
+
+      let body: z.infer<typeof bodySchema>;
+      const entities: Array<{ entity: Entity }> = [];
+      let entity: Entity;
+      let location: { type: string; target: string };
+      try {
+        body = await validateRequestBody(req, bodySchema);
+        body.entities.forEach(element => {
+          entity = validateEntityEnvelope(element.entity);
+
+          entities.push({ entity: entity });
+        });
+        location = parseLocationRef(body.location);
+        if (location.type !== 'url')
+          throw new TypeError(
+            `Invalid location ref ${body.location}, only 'url:<target>' is supported, e.g. url:https://host/path`,
+          );
+      } catch (err) {
+        return res.status(400).json({
+          errors: [serializeError(err)],
+        });
+      }
+      const entitiesToProcess: Array<{ entity: Entity }> = [];
+      entities.forEach(element => {
+        entitiesToProcess.push({
+          entity: {
+            ...element.entity,
+            metadata: {
+              ...element.entity.metadata,
+              annotations: {
+                [ANNOTATION_LOCATION]: body.location,
+                [ANNOTATION_ORIGIN_LOCATION]: body.location,
+                ...entity.metadata.annotations,
+              },
+            },
+          },
+        });
+      });
+      const processingResult = await orchestrator.processMultiple(
+        entitiesToProcess,
+      );
+
+      processingResult.forEach(result => {
+        if (!result.ok) {
+          console.log('not ok');
+          console.log(result.errors);
+        } else {
+          console.log('ok');
+        }
+      });
+
+      // if (!processingResult.ok)
+      //   res.status(400).json({
+      //     errors: processingResult.errors.map(e => serializeError(e)),
+      //   });
       return res.status(200).end();
     });
   }
